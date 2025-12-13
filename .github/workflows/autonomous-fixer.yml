@@ -13,6 +13,9 @@ jobs:
   run-fixer:
     # Use a Node image that also has Git, which is standard in GitHub runners
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # Allows git push/commit
+      pull-requests: write  # Allows gh pr create
 
     steps:
       # 1. Checkout the code
@@ -26,7 +29,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
 
       # 3. Install GitHub CLI (usually pre-installed, but safe to ensure)
       - name: Install GitHub CLI

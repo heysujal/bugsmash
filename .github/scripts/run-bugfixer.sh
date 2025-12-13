@@ -24,7 +24,7 @@ npm install
 echo "Running ESLint..."
 # Use a temporary file for lint output
 LINT_FILE="lint.json"
-npx eslint "$REPO_PATH" --format json --output-file "$LINT_FILE"
+npx eslint . --format json --output-file "$LINT_FILE" || true
 
 # 5. Run Cline to generate the patch
 echo "Running Cline to generate patch..."
