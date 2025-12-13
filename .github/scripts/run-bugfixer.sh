@@ -34,16 +34,15 @@ echo "Running Cline to generate patch..."
 PATCH_FILE="patch.diff"
 SUMMARY_FILE="cline_summary.txt"
 
-# 🛑 MODIFIED: Redirect STDOUT/STDERR of cline run to the terminal for debugging
-cline run \
-  --prompt-file="./prompts/fix-dry-run.md" \
-  --input "$LINT_FILE" \
-  --repo="." \
-  --output "$PATCH_FILE" \
+# 🛑 FINAL CRITICAL FIX: Use the available flags: -y (yolo), -o (oneshot), -f (file)
+# We prompt Cline to "Review the attached lint.json file and generate a git patch to fix all issues."
+cline "Review the attached lint.json file and generate a git patch to fix all issues." \
+  -y \
+  -o \
+  -f "$LINT_FILE" \
   > "$SUMMARY_FILE" 2>&1 || true
 
 echo "--- DEBUG: CLINE SUMMARY (STDOUT/STDERR) ---"
-# 🛑 ADDED: Print the Cline summary to see if it reports a connection error or a reason for skipping.
 cat "$SUMMARY_FILE"
 
 # 6. Apply patch and commit
