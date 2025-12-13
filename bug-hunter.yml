@@ -1,0 +1,101 @@
+id: autonomous-bug-fixer
+namespace: bughunter
+description: |
+  Autonomous Bug Fixer using Kestra + Cline.
+  Clones a repo, runs ESLint, lets Cline propose fixes,
+  applies patch, and opens a PR.
+inputs:
+  - id: repoUrl
+    type: STRING
+    description: Public GitHub repository URL
+tasks:
+  # 🛑 CRITICAL FIX: The WorkingDirectory is now configured with the Docker runner.
+  # This makes 'node:18' the execution environment for all nested shell tasks.
+  - id: working_directory
+    type: io.kestra.plugin.core.flow.WorkingDirectory
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+      image: 'node:18'
+    tasks:
+      # 1️⃣ Clone repository
+      - id: clone_repo
+        type: io.kestra.plugin.git.Clone
+        url: "{{ inputs.repoUrl }}"
+        branch: main
+        
+      # 2️⃣ Install dependencies (now using npm inside node:18 container)
+      - id: install_deps
+        type: io.kestra.plugin.scripts.shell.Script
+        script: |
+          cd {{ outputs.clone_repo.directory }}
+          npm install || true
+          
+      # 3️⃣ Run ESLint and save output
+      - id: run_eslint
+        type: io.kestra.plugin.scripts.shell.Script
+        script: |
+          cd {{ outputs.clone_repo.directory }}
+          npx eslint . --format json --output-file lint.json || true
+          cat lint.json
+        outputFiles:
+          - "{{ outputs.clone_repo.directory }}/lint.json"
+          
+      # 4️⃣ Run Cline agent
+      - id: run_cline_agent
+        type: io.kestra.plugin.scripts.shell.Script
+        script: |
+          cd {{ outputs.clone_repo.directory }}
+          echo '{{ read(outputs.run_eslint.outputFiles["lint.json"]) }}' > lint.json
+          cline run \
+            --prompt-file=prompts/fix-dry-run.md \
+            --input lint.json \
+            --repo=. \
+            --output patch.diff \
+            > cline_summary.txt || true
+          cat cline_summary.txt || echo "No summary generated"
+          cat patch.diff || echo "No patch generated"
+        outputFiles:
+          - "{{ outputs.clone_repo.directory }}/patch.diff"
+          - "{{ outputs.clone_repo.directory }}/cline_summary.txt"
+          
+      # 5️⃣ Apply patch + commit + push branch
+      - id: apply_patch_and_commit
+        type: io.kestra.plugin.scripts.shell.Script
+        script: |
+          cd {{ outputs.clone_repo.directory }}
+          git config user.email "bughunter@kestra.io"
+          git config user.name "Kestra BugHunter Bot"
+          git checkout -b bugfix-{{ execution.id }}
+          
+          # Read patch content back from Kestra storage before applying
+          echo '{{ read(outputs.run_cline_agent.outputFiles["patch.diff"]) }}' > patch.diff
+          
+          if [ -f "patch.diff" ] && [ -s "patch.diff" ]; then
+            git apply patch.diff
+            git add .
+            
+            # Commit using the summary file content
+            git commit -m "feat(cline): auto-fix lint issues ({{ execution.id }})" \
+            -m "$(cat {{ outputs.run_cline_agent.outputFiles['cline_summary.txt'] }})" || true
+            
+            git push origin bugfix-{{ execution.id }}
+          else
+            echo "No patch to apply"
+            exit 0
+          fi
+          
+      # 6️⃣ Open GitHub PR
+      - id: open_github_pr
+        type: io.kestra.plugin.github.pulls.Create
+        oauthToken: "{{ secret('GITHUB_PR_TOKEN') }}"
+        repository: "heysujal/sample-eslint"
+        sourceBranch: bugfix-{{ execution.id }}
+        targetBranch: main
+        title: "BugHunter: Autonomous Fix by Cline ({{ execution.id }})"
+        body: |
+          🤖 This PR was generated automatically using **Kestra + Cline**.
+          
+          Summary:
+          {{ read(outputs.run_cline_agent.outputFiles["cline_summary.txt"]) }}
+          
+          Execution ID: {{ execution.id }}

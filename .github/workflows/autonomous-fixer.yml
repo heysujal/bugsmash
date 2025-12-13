@@ -1,0 +1,49 @@
+name: Autonomous Bug Fixer
+
+# This workflow can be triggered manually via the GitHub UI
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'Repository URL (e.g., https://github.com/heysujal/sample-eslint)'
+        required: true
+        default: 'https://github.com/heysujal/sample-eslint' # Set your default test repo here
+
+jobs:
+  run-fixer:
+    # Use a Node image that also has Git, which is standard in GitHub runners
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use the default token to allow cloning
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # 2. Setup Node.js Environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      # 3. Install GitHub CLI (usually pre-installed, but safe to ensure)
+      - name: Install GitHub CLI
+        run: sudo apt-get install -y gh
+
+      # 4. Install Cline (CRITICAL: You must ensure Cline is installed here)
+      # For a hackathon, you might compile it or download a binary.
+      - name: Install Cline
+        run: |
+          # Replace this with the actual Cline installation steps:
+          # Example: npm install -g @cline/cli or download the binary
+          echo "Placeholder for Cline installation. Make sure it's runnable."
+
+      # 5. Execute the core logic script
+      - name: Run Bug Fixer Script
+        run: ./.github/scripts/run-bugfixer.sh
+        env:
+          # GitHub automatically provides a GITHUB_TOKEN for push/PR creation
+          # Ensure this token has 'contents: write' and 'pull-requests: write' permissions
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

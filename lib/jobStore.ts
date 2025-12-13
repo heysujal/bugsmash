@@ -12,6 +12,7 @@ export type Job = {
   status: JobStatus;
   logs: string[];
   createdAt: number;
+  patch?: string;
 };
 
 const jobs = new Map<string, Job>();
