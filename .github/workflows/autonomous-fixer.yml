@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       repo_url:
-        description: 'Repository URL (e.g., https://github.com/heysujal/sample-eslint)'
+        description: "Repository URL (e.g., https://github.com/heysujal/sample-eslint)"
         required: true
-        default: 'https://github.com/heysujal/sample-eslint' # Set your default test repo here
+        default: "https://github.com/heysujal/sample-eslint" # Set your default test repo here
 
 jobs:
   run-fixer:
@@ -21,13 +21,13 @@ jobs:
         with:
           # Use the default token to allow cloning
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       # 2. Setup Node.js Environment
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          
+          node-version: "18"
+
       # 3. Install GitHub CLI (usually pre-installed, but safe to ensure)
       - name: Install GitHub CLI
         run: sudo apt-get install -y gh
@@ -36,9 +36,7 @@ jobs:
       # For a hackathon, you might compile it or download a binary.
       - name: Install Cline
         run: |
-          # Replace this with the actual Cline installation steps:
-          # Example: npm install -g @cline/cli or download the binary
-          echo "Placeholder for Cline installation. Make sure it's runnable."
+          npm install -g @cline/cli
 
       # 5. Execute the core logic script
       - name: Run Bug Fixer Script
