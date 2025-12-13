@@ -22,24 +22,29 @@ npm install
 
 # 4. Run ESLint and capture output
 echo "Running ESLint..."
-# Use a temporary file for lint output
 LINT_FILE="lint.json"
-npx eslint . --format json --output-file "$LINT_FILE" || true
+npx eslint . --format json --output-file "$LINT_FILE" || true 
+
+echo "--- DEBUG: LINT.JSON CONTENT ---"
+# 🛑 ADDED: Print the content of lint.json to verify ESLint found errors.
+cat "$LINT_FILE" 
 
 # 5. Run Cline to generate the patch
 echo "Running Cline to generate patch..."
 PATCH_FILE="patch.diff"
 SUMMARY_FILE="cline_summary.txt"
 
-# Ensure Cline is installed in the GitHub Action environment (you will need to install it)
-# For the hackathon, you must ensure the 'cline' binary is available in your Runner image.
-
+# 🛑 MODIFIED: Redirect STDOUT/STDERR of cline run to the terminal for debugging
 cline run \
   --prompt-file="./prompts/fix-dry-run.md" \
   --input "$LINT_FILE" \
-  --repo="$REPO_PATH" \
+  --repo="." \
   --output "$PATCH_FILE" \
   > "$SUMMARY_FILE" 2>&1 || true
+
+echo "--- DEBUG: CLINE SUMMARY (STDOUT/STDERR) ---"
+# 🛑 ADDED: Print the Cline summary to see if it reports a connection error or a reason for skipping.
+cat "$SUMMARY_FILE"
 
 # 6. Apply patch and commit
 if [ -s "$PATCH_FILE" ]; then
