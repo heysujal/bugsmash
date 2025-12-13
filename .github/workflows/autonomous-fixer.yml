@@ -36,7 +36,7 @@ jobs:
       # For a hackathon, you might compile it or download a binary.
       - name: Install Cline
         run: |
-          npm install -g @cline/cli
+          npm install -g cline
 
       # 5. Execute the core logic script
       - name: Run Bug Fixer Script
