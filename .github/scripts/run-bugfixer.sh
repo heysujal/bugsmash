@@ -125,13 +125,22 @@ echo "Prompt for Cline:"
 cat cline_prompt.txt
 echo ""
 
-# Run Cline
-cline "$(cat cline_prompt.txt)" \
+# Run Cline with a timeout
+echo "Running Cline (max 5 minutes)..."
+timeout 300 cline "$(cat cline_prompt.txt)" \
   -y \
   -o \
   -f "$LINT_FILE" \
   --no-interactive \
-  > "$SUMMARY_FILE" 2>&1 || true
+  > "$SUMMARY_FILE" 2>&1 || {
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 124 ]; then
+        echo "⚠️  Cline timed out after 5 minutes"
+        echo "Cline timed out" > "$SUMMARY_FILE"
+    else
+        echo "⚠️  Cline exited with code $EXIT_CODE"
+    fi
+}
 
 echo ""
 echo "--- CLINE OUTPUT ---"
@@ -159,16 +168,29 @@ git add -A
 # 11. Verify we have changes to commit
 if git diff --cached --quiet; then
     echo ""
-    echo "⚠️  No changes were made by Cline."
-    echo ""
-    echo "Possible reasons:"
-    echo "  - Cline couldn't understand the lint.json format"
-    echo "  - Cline ran but didn't save the changes"
-    echo "  - The issues require manual intervention"
-    echo ""
-    echo "Lint results were:"
-    cat "$LINT_FILE"
-    exit 0
+    echo "⚠️  No changes were made by Cline. Trying ESLint auto-fix as fallback..."
+    
+    # Try ESLint's built-in --fix option for fixable issues
+    ./node_modules/.bin/eslint . --fix || true
+    
+    # Check again
+    git add -A
+    
+    if git diff --cached --quiet; then
+        echo ""
+        echo "⚠️  ESLint auto-fix also made no changes."
+        echo ""
+        echo "This could mean:"
+        echo "  1. The issues require manual intervention"
+        echo "  2. Cline/ESLint couldn't determine how to fix them"
+        echo ""
+        echo "Lint results were:"
+        cat "$LINT_FILE"
+        exit 0
+    else
+        echo "✅ ESLint auto-fix successfully fixed some issues!"
+        echo "Used ESLint --fix as fallback" > "$SUMMARY_FILE"
+    fi
 fi
 
 # 12. Show what will be committed
