@@ -8,6 +8,8 @@
 
 Built for [AI Agents Assemble Hackathon](https://wemakedevs.org/hackathons) 🏆
 
+I have taken help of AI tools like Claude and Gemini for generating code.
+
 ---
 
 ## 🎯 Hackathon Submission Tracks
