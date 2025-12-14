@@ -43,7 +43,10 @@ jobs:
 
       # 5. Execute the core logic script
       - name: Run Bug Fixer Script
-        run: ./.github/scripts/run-bugfixer.sh
+        run: ./.github/scripts/run-bugfixer.sh \
+             "${{ github.event.inputs.repo_url }}" \
+             "${{ secrets.MY_AI_API_KEY }}" \
+             "gpt-4o" # <-- Adjust this model ID if needed
         env:
           # GitHub automatically provides a GITHUB_TOKEN for push/PR creation
           # Ensure this token has 'contents: write' and 'pull-requests: write' permissions
