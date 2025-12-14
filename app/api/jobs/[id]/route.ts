@@ -15,9 +15,10 @@ function formatKestraLogs(logs: any[]): string[] {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string }}
+  { params }: { params: Promise<{ id: string }> }  // Change this line
 ) {
-    const executionId = params.id;
+    const { id } = await params; 
+    const executionId = id;
     
     // Auth header for fetch options
     const fetchOptions = {
