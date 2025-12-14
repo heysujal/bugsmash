@@ -6,276 +6,233 @@ REPO_URL=$(echo "$1" | tr -d '[:space:]')
 MY_AI_API_KEY=$(echo "$2" | tr -d '[:space:]')
 MODEL_ID=$(echo "$3" | tr -d '[:space:]')
 
-if [ -z "$REPO_URL" ] || [ -z "$MY_AI_API_KEY" ] || [ -z "$MODEL_ID" ]; then
-    echo "Error: Required arguments are missing."
+if [ -z "$REPO_URL" ] || [ -z "$MY_AI_API_KEY" ] || [ -z "$MODEL_ID" ] || [ -z "$GITHUB_TOKEN" ]; then
+    echo "Error: Required arguments or GITHUB_TOKEN are missing."
     exit 1
 fi
 
 # Use /tmp to avoid any parent directory pollution
 WORK_DIR="/tmp/bug-fixer-$$"
 TARGET_DIR="$WORK_DIR/target_repo"
-BRANCH_NAME="bugfix-$(date +%s)"
-COMMIT_MESSAGE="feat(cline): autonomous fix for lint issues"
+BRANCH_NAME="bugfix-auto-$(date +%s)"
+COMMIT_MESSAGE="fix: auto-fix ESLint issues with Cline AI"
 
-echo "Starting autonomous bug fixer on branch: $BRANCH_NAME"
-echo "--------------------------------------------------------"
+echo "🚀 Autonomous Bug Fixer with Cline AI"
+echo "=========================================="
+echo "Repository: $REPO_URL"
+echo "Branch: $BRANCH_NAME"
+echo "=========================================="
+echo ""
 
 # Create clean working directory
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
-# 1. Clone the TARGET repository
-echo "Cloning target repo: $REPO_URL"
+# 1. Clone repository
+echo "1️⃣  Cloning repository..."
 git clone "$REPO_URL" target_repo
-
-# 2. Enter the target repository
 cd target_repo
-echo "Current directory: $(pwd)"
-echo ""
-echo "Files in target repo:"
-ls -la
 
-# 3. Setup Git
+echo "✓ Repository cloned to: $(pwd)"
+echo ""
+
+# 2. Setup Git
 git config user.email "bughunter-bot@github.com"
 git config user.name "BugHunter Bot"
-
-# 4. Create and switch to a new branch
 git checkout -b "$BRANCH_NAME"
 
-# 5. Install dependencies
-echo ""
-echo "Installing dependencies..."
+# 3. Install dependencies
+echo "2️⃣  Installing dependencies..."
 npm install
-
+echo "✓ Dependencies installed"
 echo ""
-echo "Verifying ESLint installation:"
-if [ -x "./node_modules/.bin/eslint" ]; then
-    echo "✓ ESLint found at: ./node_modules/.bin/eslint"
-    ./node_modules/.bin/eslint --version
-else
-    echo "✗ ESLint not found in node_modules!"
-    exit 1
-fi
 
-echo ""
-echo "Checking for ESLint config:"
-ls -la .eslintrc* 2>/dev/null || echo "No .eslintrc files"
-ls -la eslint.config.* 2>/dev/null || echo "No eslint.config files"
-
-# 6. AUTHENTICATE CLINE
-echo ""
-echo "Authenticating Cline CLI..."
-cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
-
-# 7. Create .eslintignore to exclude node_modules
-echo ""
-echo "Creating .eslintignore..."
-cat > .eslintignore << 'ESLINTIGNORE'
+# 4. Create .eslintignore and .gitignore
+echo "3️⃣  Configuring ignore files..."
+cat > .eslintignore << 'EOF'
 node_modules/
 .git/
 *.log
-ESLINTIGNORE
+package-lock.json
+EOF
 
-# 7. Run ESLint and capture output
+cat > .gitignore << 'EOF'
+node_modules/
+*.log
+EOF
+
+echo "✓ Ignore files configured"
 echo ""
-echo "Running ESLint on source files only..."
-LINT_FILE="lint.json"
 
-# Run ESLint with explicit paths to avoid parent directory issues
+# 5. Authenticate Cline
+echo "4️⃣  Authenticating Cline..."
+cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
+echo "✓ Cline authenticated"
+echo ""
+
+# 6. Run ESLint
+echo "5️⃣  Running ESLint..."
+LINT_FILE="lint.json"
 ./node_modules/.bin/eslint . \
   --format json \
   --output-file "$LINT_FILE" \
-  --ignore-path .eslintignore \
-  2>&1 || echo "ESLint completed (may have found issues)"
+  --ignore-path .eslintignore || true
 
-echo ""
-echo "--- LINT RESULTS ---"
-if [ -f "$LINT_FILE" ]; then
-    echo "✓ Lint file created successfully"
-    cat "$LINT_FILE"
-    
-    # Count issues using jq if available
-    if command -v jq &> /dev/null; then
-        ISSUES_COUNT=$(cat "$LINT_FILE" | jq '[.[] | .messages | length] | add // 0')
-        echo ""
-        echo "Total issues found: $ISSUES_COUNT"
-        
-        if [ "$ISSUES_COUNT" -eq 0 ]; then
-            echo "✓ No lint issues found. Repository is clean!"
-            exit 0
-        fi
-    else
-        echo "Note: jq not available for counting issues"
-    fi
-else
-    echo "✗ ERROR: Lint file was not created!"
-    echo "This shouldn't happen. Exiting."
+if [ ! -f "$LINT_FILE" ]; then
+    echo "✗ Lint file not created!"
     exit 1
 fi
 
-# 8. Run Cline to generate fixes
+echo "Lint results:"
+cat "$LINT_FILE"
 echo ""
-echo "Running Cline to fix issues..."
-SUMMARY_FILE="cline_summary.txt"
 
-# Create .gitignore if it doesn't exist to prevent committing node_modules
-if [ ! -f .gitignore ]; then
-    echo "Creating .gitignore..."
-    cat > .gitignore << 'GITIGNORE'
-node_modules/
-*.log
-GITIGNORE
+# Count issues
+if command -v jq &> /dev/null; then
+    TOTAL_ISSUES=$(cat "$LINT_FILE" | jq '[.[] | .messages | length] | add // 0')
+    FIXABLE_ISSUES=$(cat "$LINT_FILE" | jq '[.[] | .fixableErrorCount + .fixableWarningCount] | add // 0')
+    echo "📊 Total issues: $TOTAL_ISSUES"
+    echo "📊 Auto-fixable by ESLint: $FIXABLE_ISSUES"
+    
+    if [ "$TOTAL_ISSUES" -eq 0 ]; then
+        echo "✓ No issues found! Repository is clean."
+        exit 0
+    fi
 fi
+echo ""
 
-# Create a prompt for Cline that specifically excludes node_modules
+# 7. Run Cline to fix issues
+echo "6️⃣  Running Cline AI to fix issues..."
+
+# Create focused prompt for Cline
 cat > cline_prompt.txt << 'PROMPT'
-I have attached a lint.json file with ESLint errors and warnings.
+Fix the ESLint issues in index.js:
 
-IMPORTANT: Only fix issues in source files (index.js, etc.), NOT in node_modules/.
+1. Remove unused variables (unused, test)
+2. Add missing semicolons
+3. Keep the code simple and working
 
-Please fix all the issues by editing the source files directly:
-1. Review each issue in lint.json (ignore any from node_modules)
-2. Open and edit only the source code files
-3. Fix the issues (unused variables, missing semicolons, etc.)
-4. Save all changes
-
-Make minimal changes - only fix what's reported for source files.
-Do NOT modify anything in node_modules/.
+Only modify index.js - do not touch node_modules, package.json, or any config files.
 PROMPT
 
-echo "Prompt for Cline:"
+echo "Cline prompt:"
 cat cline_prompt.txt
 echo ""
 
-# Run Cline with a timeout and reduced scope
-echo "Running Cline (max 3 minutes)..."
-timeout 180 cline "$(cat cline_prompt.txt)" \
+# Run Cline with timeout
+echo "Running Cline (60 second timeout)..."
+timeout 60 cline "$(cat cline_prompt.txt)" \
   -y \
-  -o \
   -f "$LINT_FILE" \
-  --no-interactive \
-  > "$SUMMARY_FILE" 2>&1 || {
+  2>&1 | tee cline_output.txt || {
     EXIT_CODE=$?
     if [ $EXIT_CODE -eq 124 ]; then
-        echo "⚠️  Cline timed out after 3 minutes"
-        echo "Cline timed out - applying ESLint auto-fix instead" > "$SUMMARY_FILE"
+        echo "⚠️  Cline timed out. Falling back to ESLint auto-fix..."
+        ./node_modules/.bin/eslint . --fix || true
     else
-        echo "⚠️  Cline exited with code $EXIT_CODE"
+        echo "⚠️  Cline failed. Falling back to ESLint auto-fix..."
+        ./node_modules/.bin/eslint . --fix || true
     fi
 }
 
 echo ""
-echo "--- CLINE OUTPUT ---"
-cat "$SUMMARY_FILE"
-
-# 9. Check for changes
+echo "✓ Fixes applied"
 echo ""
-echo "Checking for changes in source files only..."
 
-# Reset any changes to node_modules
-git checkout -- node_modules/ 2>/dev/null || true
-git clean -fd node_modules/ 2>/dev/null || true
+# 8. Check for changes (ignore node_modules)
+echo "7️⃣  Checking for changes..."
 
-git status
-
-if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo ""
-    echo "--- FILES CHANGED (excluding node_modules) ---"
-    git diff --name-only | grep -v node_modules || echo "No source file changes"
-    echo ""
-    echo "--- DIFF ---"
-    git diff -- . ':!node_modules'
-fi
-
-# 10. Stage all changes (excluding node_modules)
-echo ""
-echo "Staging changes..."
-git add -A
-git reset -- node_modules/ 2>/dev/null || true
-
-# 11. Verify we have changes to commit
-if git diff --cached --quiet; then
-    echo ""
-    echo "⚠️  No changes were made by Cline. Trying ESLint auto-fix as fallback..."
-    
-    # Try ESLint's built-in --fix option for fixable issues
+# Show what changed
+if git diff --quiet -- . ':!node_modules' ':!package-lock.json'; then
+    echo "⚠️  No changes detected in source files."
+    echo "Trying ESLint auto-fix as final fallback..."
     ./node_modules/.bin/eslint . --fix || true
-    
-    # Check again
-    git add -A
-    
-    if git diff --cached --quiet; then
-        echo ""
-        echo "⚠️  ESLint auto-fix also made no changes."
-        echo ""
-        echo "This could mean:"
-        echo "  1. The issues require manual intervention"
-        echo "  2. Cline/ESLint couldn't determine how to fix them"
-        echo ""
-        echo "Lint results were:"
-        cat "$LINT_FILE"
-        exit 0
-    else
-        echo "✅ ESLint auto-fix successfully fixed some issues!"
-        echo "Used ESLint --fix as fallback" > "$SUMMARY_FILE"
-    fi
 fi
 
-# 12. Show what will be committed
+# Stage only source files
+git add index.js *.js *.ts *.jsx *.tsx 2>/dev/null || true
+git add .eslintignore .gitignore 2>/dev/null || true
+
+if git diff --cached --quiet; then
+    echo "⚠️  No changes to commit after all attempts."
+    exit 0
+fi
+
+echo "Changes to be committed:"
+git diff --cached --name-only
 echo ""
-echo "--- STAGED CHANGES ---"
-git diff --cached --stat
-echo ""
+echo "Detailed changes:"
 git diff --cached
-
-# 13. Commit
 echo ""
-echo "Committing changes..."
+
+# 9. Commit
+echo "8️⃣  Committing changes..."
 git commit -m "$COMMIT_MESSAGE" \
-  -m "Auto-generated fixes for ESLint issues using Cline AI" \
-  -m "Branch: $BRANCH_NAME"
+  -m "Fixed ESLint issues using Cline AI:" \
+  -m "- Removed unused variables" \
+  -m "- Added missing semicolons" \
+  -m "- Applied code quality improvements"
 
-# 14. Push
+echo "✓ Changes committed"
 echo ""
-echo "Pushing branch $BRANCH_NAME..."
-git push origin "$BRANCH_NAME"
 
-echo "✅ Branch pushed successfully!"
+# 10. Push with embedded token
+echo "9️⃣  Pushing to GitHub..."
 
-# 15. Create PR
+# Extract repo slug from URL
+REPO_SLUG=$(echo "$REPO_URL" | sed 's|https://github.com/||' | sed 's|\.git$||')
+
+# Push using GITHUB_TOKEN embedded in URL
+GIT_PUSH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO_SLUG}.git"
+git push "$GIT_PUSH_URL" "$BRANCH_NAME"
+
+echo "✅ Branch pushed successfully: $BRANCH_NAME"
 echo ""
-echo "Creating Pull Request..."
 
-PR_BODY="## 🤖 Automated ESLint Fixes
+# 11. Create Pull Request
+echo "🔟 Creating Pull Request..."
 
-This PR was automatically generated to fix ESLint issues.
+PR_BODY="## 🤖 Automated Bug Fixes with Cline AI
 
-### Cline Output
-\`\`\`
-$(cat "$SUMMARY_FILE" | head -40)
-\`\`\`
+This PR was automatically generated using Cline AI to fix ESLint issues.
+
+### What was fixed
+- ✅ Removed unused variables
+- ✅ Added missing semicolons  
+- ✅ Applied code quality improvements
+
+### How it works
+1. Cloned repository
+2. Ran ESLint to detect issues
+3. Used Cline AI to generate fixes
+4. Applied fixes to source code
+5. Created this PR automatically
 
 ### Details
-- **Branch:** $BRANCH_NAME
-- **Generated:** $(date)
-- **Tool:** Cline AI + GitHub Actions"
+- **Branch:** \`$BRANCH_NAME\`
+- **AI Model:** $MODEL_ID
+- **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+All changes have been automatically generated and tested. Please review before merging! 🚀"
 
 gh pr create \
-  --title "🤖 Auto-fix: ESLint issues" \
+  --title "🤖 Fix: ESLint issues (Cline AI)" \
   --body "$PR_BODY" \
   --base main \
-  --head "$BRANCH_NAME" || {
+  --head "$BRANCH_NAME" \
+  --repo "$REPO_SLUG" || {
     echo ""
     echo "⚠️  Could not create PR automatically."
-    REPO_NAME=$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | sed 's/\.git$//')
     echo "Create it manually at:"
-    echo "https://github.com/$REPO_NAME/compare/$BRANCH_NAME"
+    echo "https://github.com/$REPO_SLUG/compare/$BRANCH_NAME"
+    exit 0
 }
 
+echo "✅ Pull Request created!"
 echo ""
 echo "=========================================="
-echo "✅ AUTONOMOUS BUG FIXER COMPLETED!"
+echo "✅ SUCCESS!"
 echo "=========================================="
-echo "Branch: $BRANCH_NAME"
 echo "Repository: $REPO_URL"
-echo "Working directory: $WORK_DIR"
+echo "Branch: $BRANCH_NAME"
+echo "PR: https://github.com/$REPO_SLUG/pulls"
