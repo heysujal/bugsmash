@@ -126,8 +126,8 @@ cat cline_prompt.txt
 echo ""
 
 # Run Cline with a timeout
-echo "Running Cline (max 5 minutes)..."
-timeout 300 cline "$(cat cline_prompt.txt)" \
+echo "Running Cline (max 10 minutes)..."
+timeout 600 cline "$(cat cline_prompt.txt)" \
   -y \
   -o \
   -f "$LINT_FILE" \
