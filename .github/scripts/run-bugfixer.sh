@@ -105,14 +105,20 @@ echo ""
 echo "6️⃣  Running Cline AI to fix issues..."
 
 # Create focused prompt for Cline
+# Create a better prompt for Cline
 cat > cline_prompt.txt << 'PROMPT'
-Fix the ESLint issues in index.js:
+You are a code quality assistant. Fix the ESLint issues in index.js:
 
-1. Remove unused variables (unused, test)
-2. Add missing semicolons
-3. Keep the code simple and working
+RULES:
+1. For unused variables: Remove them completely
+2. For unused functions: If they look like example/test code, keep them but call them to make them "used"
+3. For missing semicolons: Add them
+4. Preserve the general structure and intent of the code
+5. Make minimal changes - only fix what ESLint reports
 
-Only modify index.js - do not touch node_modules, package.json, or any config files.
+Example: If there's an unused function `test()`, add a call like `test();` at the end instead of deleting it.
+
+Only modify index.js - do not touch any other files.
 PROMPT
 
 echo "Cline prompt:"
