@@ -27,6 +27,20 @@ export default function Home() {
   const [prLoading, setPrLoading] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
 
+  const getRepoInfo = (url: string) => {
+    try {
+      const match = url.match(/github\.com\/([^/]+)\/([^/]+)/)
+      if (match) {
+        return { owner: match[1], repo: match[2].replace(".git", "") }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    return null
+  }
+
+  const repoInfo = getRepoInfo(repoUrl)
+
   const fetchRecentPrs = useCallback(async (url: string) => {
     if (!url || !url.includes("github.com")) {
       setRecentPrs([])
@@ -88,7 +102,6 @@ export default function Home() {
       const data = await response.json()
 
       if (data.success) {
-        const viewLink = "https://github.com/heysujal/bugsmash/actions"
         setStatus(`✓ Workflow triggered successfully`)
         setProgress(100)
       } else {
@@ -236,6 +249,52 @@ export default function Home() {
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+
+                  {!loading && status.startsWith("✓") && repoInfo && (
+                    <div className="mt-4 space-y-2 border-t border-border pt-4">
+                      <p className="text-sm font-medium text-foreground">What's Next?</p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <a
+                          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                            />
+                          </svg>
+                          View Pull Requests
+                        </a>
+                        <a
+                          href="https://github.com/heysujal/bugsmash/actions"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                          Watch Workflow Run
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
