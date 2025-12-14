@@ -3,10 +3,11 @@ set -e
 
 # --- Configuration ---
 
-# 🛑 Get arguments: $1=RepoURL, $2=API_KEY, $3=MODEL_ID
-REPO_URL="$1" 
-MY_AI_API_KEY="$2"
-MODEL_ID="$3"
+# 🛑 CRITICAL FIX: Use 'tr -d' inside a command substitution to remove all leading/trailing whitespace
+# This handles the rogue space coming from the YAML's line continuation.
+REPO_URL=$(echo "$1" | tr -d '[:space:]')
+MY_AI_API_KEY=$(echo "$2" | tr -d '[:space:]')
+MODEL_ID=$(echo "$3" | tr -d '[:space:]')
 
 if [ -z "$REPO_URL" ] || [ -z "$MY_AI_API_KEY" ] || [ -z "$MODEL_ID" ]; then
     echo "Error: Required arguments are missing."
@@ -26,6 +27,7 @@ git config user.name "BugHunter Bot"
 
 # 2. Clone the TARGET repository
 echo "Cloning target repo: $REPO_URL into $TARGET_DIR"
+# The REPO_URL is now guaranteed to be clean.
 git clone "$REPO_URL" "$TARGET_DIR"
 
 # 3. Enter the target repository
