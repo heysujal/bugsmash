@@ -67,15 +67,25 @@ echo ""
 echo "Authenticating Cline CLI..."
 cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
 
+# 7. Create .eslintignore to exclude node_modules
+echo ""
+echo "Creating .eslintignore..."
+cat > .eslintignore << 'ESLINTIGNORE'
+node_modules/
+.git/
+*.log
+ESLINTIGNORE
+
 # 7. Run ESLint and capture output
 echo ""
-echo "Running ESLint..."
+echo "Running ESLint on source files only..."
 LINT_FILE="lint.json"
 
 # Run ESLint with explicit paths to avoid parent directory issues
 ./node_modules/.bin/eslint . \
   --format json \
   --output-file "$LINT_FILE" \
+  --ignore-path .eslintignore \
   2>&1 || echo "ESLint completed (may have found issues)"
 
 echo ""
@@ -108,26 +118,38 @@ echo ""
 echo "Running Cline to fix issues..."
 SUMMARY_FILE="cline_summary.txt"
 
-# Create a prompt for Cline
+# Create .gitignore if it doesn't exist to prevent committing node_modules
+if [ ! -f .gitignore ]; then
+    echo "Creating .gitignore..."
+    cat > .gitignore << 'GITIGNORE'
+node_modules/
+*.log
+GITIGNORE
+fi
+
+# Create a prompt for Cline that specifically excludes node_modules
 cat > cline_prompt.txt << 'PROMPT'
 I have attached a lint.json file with ESLint errors and warnings.
 
+IMPORTANT: Only fix issues in source files (index.js, etc.), NOT in node_modules/.
+
 Please fix all the issues by editing the source files directly:
-1. Review each issue in lint.json
-2. Open and edit the problematic files
+1. Review each issue in lint.json (ignore any from node_modules)
+2. Open and edit only the source code files
 3. Fix the issues (unused variables, missing semicolons, etc.)
 4. Save all changes
 
-Make minimal changes - only fix what's reported in the lint results.
+Make minimal changes - only fix what's reported for source files.
+Do NOT modify anything in node_modules/.
 PROMPT
 
 echo "Prompt for Cline:"
 cat cline_prompt.txt
 echo ""
 
-# Run Cline with a timeout
-echo "Running Cline (max 10 minutes)..."
-timeout 600 cline "$(cat cline_prompt.txt)" \
+# Run Cline with a timeout and reduced scope
+echo "Running Cline (max 3 minutes)..."
+timeout 180 cline "$(cat cline_prompt.txt)" \
   -y \
   -o \
   -f "$LINT_FILE" \
@@ -135,8 +157,8 @@ timeout 600 cline "$(cat cline_prompt.txt)" \
   > "$SUMMARY_FILE" 2>&1 || {
     EXIT_CODE=$?
     if [ $EXIT_CODE -eq 124 ]; then
-        echo "⚠️  Cline timed out after 5 minutes"
-        echo "Cline timed out" > "$SUMMARY_FILE"
+        echo "⚠️  Cline timed out after 3 minutes"
+        echo "Cline timed out - applying ESLint auto-fix instead" > "$SUMMARY_FILE"
     else
         echo "⚠️  Cline exited with code $EXIT_CODE"
     fi
@@ -148,22 +170,28 @@ cat "$SUMMARY_FILE"
 
 # 9. Check for changes
 echo ""
-echo "Checking for changes..."
+echo "Checking for changes in source files only..."
+
+# Reset any changes to node_modules
+git checkout -- node_modules/ 2>/dev/null || true
+git clean -fd node_modules/ 2>/dev/null || true
+
 git status
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
     echo ""
-    echo "--- FILES CHANGED ---"
-    git diff --name-only
+    echo "--- FILES CHANGED (excluding node_modules) ---"
+    git diff --name-only | grep -v node_modules || echo "No source file changes"
     echo ""
     echo "--- DIFF ---"
-    git diff
+    git diff -- . ':!node_modules'
 fi
 
-# 10. Stage all changes
+# 10. Stage all changes (excluding node_modules)
 echo ""
 echo "Staging changes..."
 git add -A
+git reset -- node_modules/ 2>/dev/null || true
 
 # 11. Verify we have changes to commit
 if git diff --cached --quiet; then
