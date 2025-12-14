@@ -66,7 +66,7 @@ echo ""
 
 # 5. Authenticate Cline
 echo "4️⃣  Authenticating Cline..."
-cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
+cline auth --provider gemini --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
 echo "✓ Cline authenticated"
 echo ""
 
