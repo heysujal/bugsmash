@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   try {
     // Trigger GitHub Actions workflow
     const response = await fetch(
-      'https://api.github.com/repos/heysujal/bugsmash/actions/workflows/bug-fixer.yml/dispatches',
+      'https://api.github.com/repos/heysujal/bugsmash/actions/workflows/autonomous-fixer.yml/dispatches',
       {
         method: 'POST',
         headers: {
