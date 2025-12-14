@@ -60,7 +60,7 @@ jobs:
           ./.github/scripts/run-bugfixer.sh \
             "${{ github.event.inputs.repo_url }}" \
             "${{ secrets.GEMINI_API_KEY }}" \
-            "gemini-1.5-flash"
+            "gemini-2.5-flash"
         env:
           # Use PAT_TOKEN if available, otherwise GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
