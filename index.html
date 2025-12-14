@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BugSmash - Autonomous Bug Fixer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <!-- Hero Section -->
+        <div class="text-center mb-16">
+            <div class="inline-block mb-6">
+                <div class="text-7xl mb-4 animate-bounce">🤖</div>
+            </div>
+            <h1 class="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                BugSmash
+            </h1>
+            <p class="text-2xl text-gray-300 mb-8">
+                Autonomous Bug Fixing with AI Agents
+            </p>
+            <p class="text-lg text-gray-400 max-w-2xl mx-auto">
+                Powered by Cline AI • Deployed on Vercel • Running on Gemini 2.5 Flash
+            </p>
+        </div>
+
+        <!-- Interactive Trigger Section -->
+        <div class="bg-gray-800/50 backdrop-blur-lg rounded-2xl p-8 mb-12 border border-purple-500/30 shadow-2xl">
+            <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
+                <span>⚡</span>
+                <span>Trigger Bug Fixer</span>
+            </h2>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-semibold text-gray-300 mb-2">
+                    Repository URL
+                </label>
+                <input 
+                    type="text" 
+                    id="repoUrl"
+                    value="https://github.com/heysujal/sample-eslint"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition"
+                    placeholder="https://github.com/username/repo"
+                />
+            </div>
+
+            <button 
+                onclick="triggerWorkflow()"
+                id="triggerBtn"
+                class="w-full bg-gradient-to-r from-blue-500 to-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:opacity-90 transition transform hover:scale-105 active:scale-95 shadow-lg">
+                🚀 Start Autonomous Bug Fix
+            </button>
+
+            <div id="status" class="mt-6 hidden">
+                <div class="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="animate-spin">⚙️</div>
+                        <span class="font-semibold">Status:</span>
+                        <span id="statusText" class="text-blue-400">Initializing...</span>
+                    </div>
+                    <div id="progressBar" class="w-full bg-gray-700 rounded-full h-2 mt-3">
+                        <div class="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- How It Works -->
+        <div class="bg-gray-800/50 backdrop-blur-lg rounded-2xl p-8 mb-12 border border-purple-500/30">
+            <h2 class="text-3xl font-bold mb-8 text-center">How It Works</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg">
+                        1
+                    </div>
+                    <h3 class="font-bold text-xl mb-2">Analyze</h3>
+                    <p class="text-gray-400">
+                        Cline AI scans your code with ESLint and identifies issues
+                    </p>
+                </div>
+                <div class="text-center">
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg">
+                        2
+                    </div>
+                    <h3 class="font-bold text-xl mb-2">Generate Fixes</h3>
+                    <p class="text-gray-400">
+                        Gemini AI generates intelligent fixes for detected issues
+                    </p>
+                </div>
+                <div class="text-center">
+                    <div class="bg-gradient-to-br from-pink-500 to-pink-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg">
+                        3
+                    </div>
+                    <h3 class="font-bold text-xl mb-3">Create PR</h3>
+                    <p class="text-gray-400">
+                        Automatically commits fixes and opens a pull request
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Fixes -->
+        <div class="bg-gray-800/50 backdrop-blur-lg rounded-2xl p-8 border border-purple-500/30">
+            <h2 class="text-3xl font-bold mb-6">Recent Fixes</h2>
+            <div class="space-y-4">
+                <div class="bg-gray-900/50 rounded-lg p-4 border border-gray-700 hover:border-purple-500/50 transition cursor-pointer">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-semibold text-green-400">✓ sample-eslint</span>
+                        <span class="text-sm text-gray-500">2 minutes ago</span>
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        Fixed 4 ESLint issues • Removed unused variables • Added semicolons
+                    </div>
+                    <a href="https://github.com/heysujal/sample-eslint/pulls" 
+                       class="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block">
+                        View PR →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="mt-12 text-center">
+            <h3 class="text-xl font-semibold text-gray-400 mb-6">Powered By</h3>
+            <div class="flex flex-wrap justify-center gap-6 items-center">
+                <div class="bg-gray-800/50 px-6 py-3 rounded-lg border border-gray-700">
+                    <span class="font-semibold">🤖 Cline AI</span>
+                </div>
+                <div class="bg-gray-800/50 px-6 py-3 rounded-lg border border-gray-700">
+                    <span class="font-semibold">▲ Vercel</span>
+                </div>
+                <div class="bg-gray-800/50 px-6 py-3 rounded-lg border border-gray-700">
+                    <span class="font-semibold">✨ Gemini 2.5</span>
+                </div>
+                <div class="bg-gray-800/50 px-6 py-3 rounded-lg border border-gray-700">
+                    <span class="font-semibold">⚙️ GitHub Actions</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-16 text-center text-gray-500">
+            <a href="https://github.com/heysujal/bugsmash" 
+               class="hover:text-purple-400 transition">
+                View Source on GitHub →
+            </a>
+        </div>
+    </div>
+
+    <script>
+        async function triggerWorkflow() {
+            const btn = document.getElementById('triggerBtn');
+            const status = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const progressBar = document.querySelector('#progressBar > div');
+            const repoUrl = document.getElementById('repoUrl').value;
+
+            if (!repoUrl) {
+                alert('Please enter a repository URL');
+                return;
+            }
+
+            // Disable button
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            btn.innerHTML = '⏳ Triggering workflow...';
+
+            // Show status
+            status.classList.remove('hidden');
+            statusText.textContent = 'Sending request to GitHub Actions...';
+            progressBar.style.width = '10%';
+
+            try {
+                // Call Vercel API to trigger GitHub Actions
+                const response = await fetch('/api/trigger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ repoUrl })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Simulate progress
+                    const steps = [
+                        { text: 'Workflow triggered successfully!', progress: 30 },
+                        { text: 'Cloning repository...', progress: 50 },
+                        { text: 'Running ESLint & Cline AI...', progress: 70 },
+                        { text: 'Generating fixes...', progress: 90 },
+                        { text: 'Check GitHub Actions for progress', progress: 100 }
+                    ];
+
+                    for (let i = 0; i < steps.length; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        statusText.textContent = steps[i].text;
+                        progressBar.style.width = steps[i].progress + '%';
+                    }
+
+                    statusText.innerHTML = '✅ Workflow started! <a href="https://github.com/heysujal/bugsmash/actions" class="text-blue-400 hover:text-blue-300 underline" target="_blank">View Progress →</a>';
+                } else {
+                    statusText.innerHTML = `❌ Error: ${data.error}`;
+                    progressBar.style.width = '100%';
+                    progressBar.classList.add('bg-red-500');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                statusText.innerHTML = '❌ Failed to trigger workflow. Try manually from GitHub Actions.';
+                progressBar.style.width = '100%';
+                progressBar.classList.add('bg-red-500');
+            }
+
+            // Re-enable button
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = '🚀 Start Autonomous Bug Fix';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
