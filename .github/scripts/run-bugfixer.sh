@@ -11,66 +11,121 @@ if [ -z "$REPO_URL" ] || [ -z "$MY_AI_API_KEY" ] || [ -z "$MODEL_ID" ]; then
     exit 1
 fi
 
-TARGET_DIR="target_repo"
+# Use /tmp to avoid any parent directory pollution
+WORK_DIR="/tmp/bug-fixer-$$"
+TARGET_DIR="$WORK_DIR/target_repo"
 BRANCH_NAME="bugfix-$(date +%s)"
 COMMIT_MESSAGE="feat(cline): autonomous fix for lint issues"
 
 echo "Starting autonomous bug fixer on branch: $BRANCH_NAME"
 echo "--------------------------------------------------------"
 
-# 1. Clone the TARGET repository FIRST
-echo "Cloning target repo: $REPO_URL into $TARGET_DIR"
-git clone "$REPO_URL" "$TARGET_DIR"
+# Create clean working directory
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR"
+
+# 1. Clone the TARGET repository
+echo "Cloning target repo: $REPO_URL"
+git clone "$REPO_URL" target_repo
 
 # 2. Enter the target repository
-cd "$TARGET_DIR"
+cd target_repo
+echo "Current directory: $(pwd)"
+echo ""
+echo "Files in target repo:"
+ls -la
 
-# 3. Setup Git (AFTER entering the target repo)
+# 3. Setup Git
 git config user.email "bughunter-bot@github.com"
 git config user.name "BugHunter Bot"
 
 # 4. Create and switch to a new branch
 git checkout -b "$BRANCH_NAME"
 
-# 5. Install dependencies IN THE TARGET REPO
-echo "Installing dependencies in target repo..."
+# 5. Install dependencies
+echo ""
+echo "Installing dependencies..."
 npm install
 
+echo ""
+echo "Verifying ESLint installation:"
+if [ -x "./node_modules/.bin/eslint" ]; then
+    echo "✓ ESLint found at: ./node_modules/.bin/eslint"
+    ./node_modules/.bin/eslint --version
+else
+    echo "✗ ESLint not found in node_modules!"
+    exit 1
+fi
+
+echo ""
+echo "Checking for ESLint config:"
+ls -la .eslintrc* 2>/dev/null || echo "No .eslintrc files"
+ls -la eslint.config.* 2>/dev/null || echo "No eslint.config files"
+
 # 6. AUTHENTICATE CLINE
+echo ""
 echo "Authenticating Cline CLI..."
 cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_ID"
 
 # 7. Run ESLint and capture output
+echo ""
 echo "Running ESLint..."
 LINT_FILE="lint.json"
 
-# Run eslint directly (not via npm script to avoid issues)
-npx eslint . --format json --output-file "$LINT_FILE" || true
+# Run ESLint with explicit paths to avoid parent directory issues
+./node_modules/.bin/eslint . \
+  --format json \
+  --output-file "$LINT_FILE" \
+  2>&1 || echo "ESLint completed (may have found issues)"
 
-echo "--- DEBUG: LINT.JSON CONTENT ---"
+echo ""
+echo "--- LINT RESULTS ---"
 if [ -f "$LINT_FILE" ]; then
-    cat "$LINT_FILE" | head -50
-    ISSUES_COUNT=$(cat "$LINT_FILE" | jq 'map(.messages | length) | add // 0')
-    echo "Total issues found: $ISSUES_COUNT"
+    echo "✓ Lint file created successfully"
+    cat "$LINT_FILE"
+    
+    # Count issues using jq if available
+    if command -v jq &> /dev/null; then
+        ISSUES_COUNT=$(cat "$LINT_FILE" | jq '[.[] | .messages | length] | add // 0')
+        echo ""
+        echo "Total issues found: $ISSUES_COUNT"
+        
+        if [ "$ISSUES_COUNT" -eq 0 ]; then
+            echo "✓ No lint issues found. Repository is clean!"
+            exit 0
+        fi
+    else
+        echo "Note: jq not available for counting issues"
+    fi
 else
-    echo "Lint file not found. Creating empty array."
-    echo "[]" > "$LINT_FILE"
+    echo "✗ ERROR: Lint file was not created!"
+    echo "This shouldn't happen. Exiting."
+    exit 1
 fi
 
-# 8. Run Cline to generate the patch
-echo "Running Cline to generate patch..."
-PATCH_FILE="patch.diff"
+# 8. Run Cline to generate fixes
+echo ""
+echo "Running Cline to fix issues..."
 SUMMARY_FILE="cline_summary.txt"
 
-# Create a prompt file for Cline
-cat > cline_prompt.txt << 'EOF'
-Review the attached lint.json file containing ESLint errors and warnings.
-Generate fixes for all the issues found.
-Create a git patch file that can be applied to fix these issues.
-Follow best practices and maintain code style consistency.
-EOF
+# Create a prompt for Cline
+cat > cline_prompt.txt << 'PROMPT'
+I have attached a lint.json file with ESLint errors and warnings.
 
-# Run Cline with the prompt and lint file
+Please fix all the issues by editing the source files directly:
+1. Review each issue in lint.json
+2. Open and edit the problematic files
+3. Fix the issues (unused variables, missing semicolons, etc.)
+4. Save all changes
+
+Make minimal changes - only fix what's reported in the lint results.
+PROMPT
+
+echo "Prompt for Cline:"
+cat cline_prompt.txt
+echo ""
+
+# Run Cline
 cline "$(cat cline_prompt.txt)" \
   -y \
   -o \
@@ -78,75 +133,99 @@ cline "$(cat cline_prompt.txt)" \
   --no-interactive \
   > "$SUMMARY_FILE" 2>&1 || true
 
-echo "--- DEBUG: CLINE SUMMARY (STDOUT/STDERR) ---"
+echo ""
+echo "--- CLINE OUTPUT ---"
 cat "$SUMMARY_FILE"
 
-# 9. Check if Cline generated changes
+# 9. Check for changes
+echo ""
 echo "Checking for changes..."
-if git diff --quiet && git diff --cached --quiet; then
-    echo "No changes detected from Cline. Checking for patch file..."
-    
-    if [ -f "$PATCH_FILE" ] && [ -s "$PATCH_FILE" ]; then
-        echo "Patch file found. Applying..."
-        git apply "$PATCH_FILE" || {
-            echo "Patch apply failed. Trying with --reject..."
-            git apply --reject "$PATCH_FILE" || echo "Continuing despite patch errors..."
-        }
-    else
-        echo "No patch generated by Cline. Checking if Cline made direct changes..."
-        
-        # Check again after potential patch application
-        if git diff --quiet && git diff --cached --quiet; then
-            echo "No changes to commit. Exiting successfully."
-            exit 0
-        fi
-    fi
+git status
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo ""
+    echo "--- FILES CHANGED ---"
+    git diff --name-only
+    echo ""
+    echo "--- DIFF ---"
+    git diff
 fi
 
 # 10. Stage all changes
+echo ""
 echo "Staging changes..."
 git add -A
 
-# 11. Check if there are staged changes
+# 11. Verify we have changes to commit
 if git diff --cached --quiet; then
-    echo "No changes to commit after staging. Exiting."
+    echo ""
+    echo "⚠️  No changes were made by Cline."
+    echo ""
+    echo "Possible reasons:"
+    echo "  - Cline couldn't understand the lint.json format"
+    echo "  - Cline ran but didn't save the changes"
+    echo "  - The issues require manual intervention"
+    echo ""
+    echo "Lint results were:"
+    cat "$LINT_FILE"
     exit 0
 fi
 
-# 12. Commit the changes
-echo "Committing changes..."
-git commit -m "$COMMIT_MESSAGE" -m "Auto-generated fixes for lint issues using Cline AI"
+# 12. Show what will be committed
+echo ""
+echo "--- STAGED CHANGES ---"
+git diff --cached --stat
+echo ""
+git diff --cached
 
-# 13. Push the branch
-echo "Pushing branch $BRANCH_NAME to origin..."
+# 13. Commit
+echo ""
+echo "Committing changes..."
+git commit -m "$COMMIT_MESSAGE" \
+  -m "Auto-generated fixes for ESLint issues using Cline AI" \
+  -m "Branch: $BRANCH_NAME"
+
+# 14. Push
+echo ""
+echo "Pushing branch $BRANCH_NAME..."
 git push origin "$BRANCH_NAME"
 
 echo "✅ Branch pushed successfully!"
 
-# 14. Create Pull Request using GitHub CLI
+# 15. Create PR
+echo ""
 echo "Creating Pull Request..."
+
+PR_BODY="## 🤖 Automated ESLint Fixes
+
+This PR was automatically generated to fix ESLint issues.
+
+### Cline Output
+\`\`\`
+$(cat "$SUMMARY_FILE" | head -40)
+\`\`\`
+
+### Details
+- **Branch:** $BRANCH_NAME
+- **Generated:** $(date)
+- **Tool:** Cline AI + GitHub Actions"
+
 gh pr create \
-  --title "🤖 Auto-fix: Lint issues ($BRANCH_NAME)" \
-  --body "This PR was automatically generated to fix ESLint issues.
-
-## Summary
-$(cat "$SUMMARY_FILE" | head -20)
-
-## Changes
-- Fixed lint errors and warnings
-- Applied best practices
-- Maintained code style consistency
-
-**Branch:** $BRANCH_NAME
-**Generated:** $(date)" \
+  --title "🤖 Auto-fix: ESLint issues" \
+  --body "$PR_BODY" \
   --base main \
   --head "$BRANCH_NAME" || {
-    echo "Failed to create PR via gh CLI. You may need to create it manually:"
-    echo "https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/')/compare/$BRANCH_NAME"
+    echo ""
+    echo "⚠️  Could not create PR automatically."
+    REPO_NAME=$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | sed 's/\.git$//')
+    echo "Create it manually at:"
+    echo "https://github.com/$REPO_NAME/compare/$BRANCH_NAME"
 }
 
+echo ""
 echo "=========================================="
 echo "✅ AUTONOMOUS BUG FIXER COMPLETED!"
 echo "=========================================="
 echo "Branch: $BRANCH_NAME"
 echo "Repository: $REPO_URL"
+echo "Working directory: $WORK_DIR"
