@@ -1,53 +1,56 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import { type NextRequest, NextResponse } from "next/server"
 
-const GITHUB_API_URL = 'https://api.github.com/repos';
+const GITHUB_API_URL = "https://api.github.com/repos"
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { repoUrl } = req.body;
-
-  if (!repoUrl) {
-    return res.status(400).json({ error: 'Repository URL is required.' });
-  }
-
-  // Extract owner and repoName from the URL
-  const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
-  if (!match) {
-    return res.status(400).json({ error: 'Invalid GitHub repository URL format.' });
-  }
-
-  const [, owner, repoName] = match;
-  const apiUrl = `${GITHUB_API_URL}/${owner}/${repoName}/pulls?state=all&per_page=5`;
-
+export async function POST(request: NextRequest) {
   try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        'Authorization': `token ${process.env.GITHUB_PAT_FOR_PR_FETCH}`, // Use your secured token
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
+    const { repoUrl } = await request.json()
 
-    if (!response.ok) {
-      // Handle rate limits or 404
-      const errorData = await response.json();
-      return res.status(response.status).json({ error: `GitHub API Error: ${response.statusText}`, details: errorData });
+    if (!repoUrl) {
+      return NextResponse.json({ error: "Repository URL is required." }, { status: 400 })
     }
 
-    const prs = await response.json();
+    const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/)
+    if (!match) {
+      return NextResponse.json({ error: "Invalid GitHub repository URL format." }, { status: 400 })
+    }
 
-    // Filter for PRs created by your bot, or just return all recent PRs
-    const botPrs = prs.filter((pr: any) => 
-      pr.user.login === 'BugHunter-Bot' || // Assuming your bot has its own user
-      pr.title.includes('Auto-fix: ESLint issues')
-    );
+    const [, owner, repoName] = match
+    const apiUrl = `${GITHUB_API_URL}/${owner}/${repoName}/pulls?state=all&per_page=10`
 
-    return res.status(200).json({ prs: botPrs.slice(0, 3) }); // Return top 3 filtered PRs
+    const headers: HeadersInit = {
+      Accept: "application/vnd.github.v3+json",
+    }
 
+    if (process.env.GITHUB_PAT_FOR_PR_FETCH) {
+      headers["Authorization"] = `token ${process.env.GITHUB_PAT_FOR_PR_FETCH}`
+    }
+
+    const response = await fetch(apiUrl, { headers })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return NextResponse.json(
+        {
+          error: `GitHub API Error: ${response.statusText}`,
+          details: errorData,
+        },
+        { status: response.status },
+      )
+    }
+
+    const prs = await response.json()
+
+    const botPrs = prs.filter(
+      (pr: any) =>
+        pr.user.login === "BugHunter-Bot" ||
+        pr.title.toLowerCase().includes("auto-fix") ||
+        pr.title.toLowerCase().includes("eslint"),
+    )
+
+    return NextResponse.json({ prs: botPrs.slice(0, 5) })
   } catch (error) {
-    console.error('PR Fetch Error:', error);
-    return res.status(500).json({ error: 'Failed to communicate with GitHub API.' });
+    console.error("[v0] PR Fetch Error:", error)
+    return NextResponse.json({ error: "Failed to communicate with GitHub API." }, { status: 500 })
   }
 }
