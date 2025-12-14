@@ -48,10 +48,13 @@ cline auth --provider openai-native --apikey "$MY_AI_API_KEY" --modelid "$MODEL_
 # 7. Run ESLint and capture output
 echo "Running ESLint..."
 LINT_FILE="lint.json"
-npx eslint . --format json --output-file "$LINT_FILE" || true 
+# 🛑 CRITICAL FIX: Replace 'npx eslint' with the more robust 'npm run lint'
+# Use 'npm run' which correctly sets up the Node environment paths for ESM
+npm run lint -- --format json --output-file "$LINT_FILE" || true 
 
 echo "--- DEBUG: LINT.JSON CONTENT ---"
-cat "$LINT_FILE" 
+# We need to suppress the error if the file is not created due to no fixable errors
+cat "$LINT_FILE" || echo "Lint file not found or empty."
 
 # 8. Run Cline to generate the patch
 echo "Running Cline to generate patch..."
